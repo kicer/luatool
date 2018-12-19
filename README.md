@@ -1,27 +1,29 @@
 # **luatool** #
 
-[![Join the chat at https://gitter.im/4refr0nt/luatool](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/4refr0nt/luatool?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Join the chat at https://gitter.im/kicer/luatool](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/kicer/luatool?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
-### Tool for loading Lua-based scripts from file to ESP8266 with nodemcu firmware
+### Tool for loading Lua-based scripts from file to Air202/Air720 with luat firmware
 
 ### Summary
 
-- Allow easy uploading of any Lua-based script into the ESP8266 flash memory with [NodeMcu firmware](https://github.com/nodemcu/nodemcu-firmware)
+- Allow easy uploading of any Lua-based script into the Air202/Air720 flash memory with [luat firmware](https://github.com/openLuat)
+- Fork from [luatool](https://github.com/4refr0nt/luatool), 修改后用于合宙luat模块固件下载
 
 ### Other projects
-Another my project for NodeMCU: ESPlorer  Integrated Development Environment (IDE) for ESP8266 developers
-- [ESPlorer home page and latest binaries](http://esp8266.ru/esplorer/)
-- [ESPlorer source code](https://github.com/4refr0nt/ESPlorer)
+todo
 
 ### Requirements
 
-python 2.7, pyserial (as for esptool)
+python 2.7, pyserial
 
 ### Discuss
-[http://esp8266.ru](http://esp8266.ru/forum/threads/luatool.11/)
+todo
 
 
 ### Changelog
+v0.7.0
+- luat只支持串口下载文件
+
 v0.6.4
 - add TCP as possible transport to connect to the module using the supplied telnet server code
 - add --id/-i to query the ID of a module
@@ -70,112 +72,61 @@ Edit file init.lua and set SSID and MasterPassword
 Then disconnect any terminal programm, and at command prompt type
 
 ```
-./luatool.py --port /dev/ttyUSB0 --src init.lua --dest init.lua --verbose
+./luatool.py --port /dev/tty.SLAB_USBtoUART --baud 115200 --src init.lua --dest /lua/init.lua --verbose
 
-Downloader start
-Set timeout 3
-Set interCharTimeout 3
-Stage 1. Deleting old file from flash memory
-->file.remove("init.lua") -> ok
-.....................................
-->file.close() -> ok
+Upload starting
+
+->file = io.open("/lua/init.lua", "w"); -> ok
+->if file then file:close() end; -> ok
+->Stage 1. Deleting old file from flash memory
+Stage 2. Creating file in flash memory and write first lineos.remove("/lua/init.lua"); -> ok
+->
+Stage 3. Start writing data to flash memory...file = io.open("/lua/init.lua", "w+"); -> ok
+->file:write([==[local uart_id = 2 ]==]); -> ok
+->file:write([==[local _print = _G.print ]==]); -> ok
+->file:write([==[local print = function(...) ]==]); -> ok
+->file:write([==[for i,v in ipairs(arg) do ]==]); -> ok
+->file:write([==[arg[i] = type(v) == 'nil' and 'nil' or tostring(v) ]==]); -> ok
+->file:write([==[end ]==]); -> ok
+->file:write([==[uart.write(uart_id, table.concat(arg,'\t')) ]==]); -> ok
+->file:write([==[uart.write(uart_id, '\r\n') ]==]); -> ok
+->file:write([==[end ]==]); -> ok
+->file:write([==[ ]==]); -> ok
+->file:write([==[print('init.lua ver 1.2') ]==]); -> ok
+->file:write([==[print('   rssi: ',net.getRssi()) ]==]); -> ok
+->file:write([==[print('  state: ',net.getState()) ]==]); -> ok
+->file:write([==[print('   imei: ',misc.getImei()) ]==]); -> ok
+->file:write([==[print('   heap: ',collectgarbage("count"),' KB') ]==]); -> ok
+->
+Stage 4. Flush data and closing filefile:write([==[print('version: ',misc.getVersion()) ]==]); -> ok
+->file:flush(); -> ok
+->file:close(); -> ok
 --->>> All done <<<---
+Echoing MCU output, press Ctrl-C to exitdofile("/lua/init.lua"); -> send without checkdofile("/lua/init.lua");
 
-./luatool.py
-
-->file.open("main.lua", "w") -> ok
-->file.close() -> ok
-->file.remove("main.lua") -> ok
-->file.open("main.lua", "w+") -> ok
-->file.writeline([[tmr.alarm(0, 1000, 1, function()]]) -> ok
-->file.writeline([[if wifi.sta.getip() == nil then]]) -> ok
-->file.writeline([[print("Connecting to AP...")]]) -> ok
-->file.writeline([[else]]) -> ok
-->file.writeline([[print('IP: ',wifi.sta.getip())]]) -> ok
-->file.writeline([[tmr.stop(0)]]) -> ok
-->file.writeline([[end]]) -> ok
-->file.writeline([[end)]]) -> ok
-->file.flush() -> ok
-->file.close() -> ok
---->>> All done <<<---
 ```
 Connect you terminal program and send command (or you can use --restart option, when loading file init.lua)
 ```
-node.restart()
+sys.restart('luatool reboot')
 ```
 after reboot:
 ```
-lua script loaded by luatool 0.4
 init.lua ver 1.2
-set mode=STATION (mode=1)
-MAC: 	18-FE-34-98-D4-B5
-chip: 	10015925
-heap: 	18464
-set wifi
-NodeMcu 0.9.2 build 20141125  powered by Lua 5.1.4
-```
-
-send command (or you can use --dofile option, when loading file main.lua)
-```
-dofile("main.lua")
-```
-connects to your AP and displays MCU's IP address
-
-```
-> dofile("main.lua")
-> IP:   192.168.1.99
-
+   rssi: 	19
+  state: 	REGISTERED
+   imei: 	xxx
+   heap: 	185	 KB
+version: 	SW_V5595_Air202_LUA_SSL
 ```
 
 #### Examples:
 
 ```
-./luatool.py --port COM4 --src file.lua --dest main.lua --baud 9600
+./luatool.py --port COM4 --src file.lua --dest /lua/main.lua --baud 115200
 ```
 - --port - COM1-COM128, default /dev/ttyUSB0
-- --baud - baud rate, default 9600
+- --baud - baud rate, default 115200
 - --src - source disk file, default main.lua
-- --dest - destination flash file, default main.lua
+- --dest - destination flash file, default /lua/main.lua
 
-If use --dest option with parameter "init.lua" - autostart init.lua after boot.
 Be carefully about bugs in lua-script - may cause a boot loop. Use this option after full testing only.
-
-Running without any parameters: load file "main.lua" via port /dev/ttyUSB0:9600 and place code into "main.lua" file into flash.
-
-```
-./luatool.py
-```
-
-after loading file to flash you can connect any terminal programm to ESP8266 and type: 
-```
-dofile("main.lua") 
-```
-for executing you lua script
-
-If you want load and autoexecute file main.lua, command dofile("main.lua"), you can use --dofile option
-```
-./luatool.py --dofile
-```
-Typically, place wifi.setmode, wifi.sta.config commands to init.lua file for connecting to you AP with low risk of boot loop, and other code place to main.lua for manually start and debug.
-
-#### Alternative use:
-
-This requires a nodemcu based module already configured to meet the following conditions:
-
-- the module is accessible via TCP/IP 
-- the telnet server (file: **telnet_srv.lua**) is running 
-
-Now the option **--ip IP[:PORT]** enables you to specify an IP and optionally a port (if changed for the telnet server)
-that will be used to communicate with the module via TCP/IP.
-
-#### Examples:
-
-```
-./luatool.py --ip 192.168.12.34 --src file.lua --dest test.lua --dofile 
-```
-
-- --ip - the IP to connect to. Note that no Port is given, so 23 will be used (can be changed in **telnet_srv.lua**)
-- --src - source disk file, default main.lua
-- --dest - destination flash file, default main.lua
-- --dofile - run the just uploaded file
-

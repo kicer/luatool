@@ -1,6 +1,6 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 #
-# ESP8266 luatool
+# luat luatool
 # Author e-mail: 4ref0nt@gmail.com
 # Site: http://esp8266.ru
 # Contributions from: https://github.com/sej7278
@@ -28,13 +28,10 @@ from os.path import basename
 tqdm_installed = True
 try:
     from tqdm import tqdm
-except ImportError, e:
-    if e.message == 'No module named tqdm':
-        tqdm_installed = False
-    else:
-        raise
+except ImportError as e:
+    tqdm_installed = False
 
-version = "0.6.4"
+version = "0.7.0"
 
 
 class TransportError(Exception):
@@ -60,22 +57,22 @@ class AbstractTransport:
         raise NotImplementedError('Function not implemented')
 
     def writer(self, data):
-        self.writeln("file.writeline([==[" + data + "]==])\r")
+        self.writeln("file:write([==[" + data + " ]==]);\r\n")
 
     def performcheck(self, expected):
         line = ''
         char = ''
         i = -1
         while char != chr(62):  # '>'
-            char = self.read(1)
+            char = str(self.read(1), encoding='gbk')
             if char == '':
                 raise Exception('No proper answer from MCU')
             if char == chr(13) or char == chr(10):  # LF or CR
                 if line != '':
                     line = line.strip()
-                    if line+'\r' == expected and not args.bar:
+                    if line+'\r\n' == expected and not args.bar:
                         sys.stdout.write(" -> ok")
-                    elif line+'\r' != expected:
+                    elif line+'\r\n' != expected:
                         if line[:4] == "lua:":
                             sys.stdout.write("\r\n\r\nLua ERROR: %s" % line)
                             raise Exception('ERROR from Lua interpreter\r\n\r\n')
@@ -116,7 +113,7 @@ class SerialTransport(AbstractTransport):
         if len(data) > 0 and not args.bar:
             sys.stdout.write("\r\n->")
             sys.stdout.write(data.split("\r")[0])
-        self.serial.write(data)
+        self.serial.write(bytes(data,encoding="gbk"))
         sleep(self.delay)
         if check > 0:
             self.performcheck(data)
@@ -167,38 +164,25 @@ class TcpSocketTransport(AbstractTransport):
 
 
 def decidetransport(cliargs):
-    if cliargs.ip:
-        data = cliargs.ip.split(':')
-        host = data[0]
-        if len(data) == 2:
-            port = int(data[1])
-        else:
-            port = 23
-        return TcpSocketTransport(host, port)
-    else:
-        return SerialTransport(cliargs.port, cliargs.baud, cliargs.delay)
+    return SerialTransport(cliargs.port, cliargs.baud, cliargs.delay)
 
 
 if __name__ == '__main__':
     # parse arguments or use defaults
-    parser = argparse.ArgumentParser(description='ESP8266 Lua script uploader.')
+    parser = argparse.ArgumentParser(description='luat script uploader.')
     parser.add_argument('-p', '--port',    default='/dev/ttyUSB0', help='Device name, default /dev/ttyUSB0')
-    parser.add_argument('-b', '--baud',    default=9600,           help='Baudrate, default 9600')
+    parser.add_argument('-b', '--baud',    default=115200,         help='Baudrate, default 115200')
     parser.add_argument('-f', '--src',     default='main.lua',     help='Source file on computer, default main.lua')
     parser.add_argument('-t', '--dest',    default=None,           help='Destination file on MCU, default to source file name')
-    parser.add_argument('-c', '--compile', action='store_true',    help='Compile lua to lc after upload')
     parser.add_argument('-r', '--restart', action='store_true',    help='Restart MCU after upload')
     parser.add_argument('-d', '--dofile',  action='store_true',    help='Run the Lua script after upload')
     parser.add_argument('-v', '--verbose', action='store_true',    help="Show progress messages.")
     parser.add_argument('-a', '--append',  action='store_true',    help='Append source file to destination file.')
-    parser.add_argument('-l', '--list',    action='store_true',    help='List files on device')
-    parser.add_argument('-w', '--wipe',    action='store_true',    help='Delete all lua/lc files on device.')
-    parser.add_argument('-i', '--id',      action='store_true',    help='Query the modules chip id.')
+    parser.add_argument('-i', '--id',      action='store_true',    help='Query the modules imei.')
     parser.add_argument('-e', '--echo',    action='store_true',    help='Echo output of MCU until script is terminated.')
     parser.add_argument('--bar',           action='store_true',    help='Show a progress bar for uploads instead of printing each line')
-    parser.add_argument('--delay',         default=0.3,            help='Delay in seconds between each write.', type=float)
+    parser.add_argument('--delay',         default=0.01,            help='Delay in seconds between each write.', type=float)
     parser.add_argument('--delete',        default=None,           help='Delete a lua/lc file from device.')
-    parser.add_argument('--ip',            default=None,           help='Connect to a telnet server on the device (--ip IP[:port])')
     args = parser.parse_args()
 
     transport = decidetransport(args)
@@ -209,20 +193,11 @@ if __name__ == '__main__':
         sys.exit(0)
 
 
-    if args.list:
-        transport.writeln("local l = file.list();for k,v in pairs(l) do print('name:'..k..', size:'..v)end\r", 0)
-        while True:
-            char = transport.read(1)
-            if char == '' or char == chr(62):
-                break
-            sys.stdout.write(char)
-        sys.exit(0)
-
     if args.id:
-        transport.writeln("=node.chipid()\r", 0)
+        transport.writeln("print(misc.getImei());\r\n", 0)
         id=""
         while True:
-            char = transport.read(1)
+            char = str(transport.read(1), encoding='gbk')
             if char == '' or char == chr(62):
                 break
             if char.isdigit():
@@ -230,32 +205,12 @@ if __name__ == '__main__':
         print("\n"+id)
         sys.exit(0)
 
-    if args.wipe:
-        transport.writeln("local l = file.list();for k,v in pairs(l) do print(k)end\r", 0)
-        file_list = []
-        fn = ""
-        while True:
-            char = transport.read(1)
-            if char == '' or char == chr(62):
-                break
-            if char not in ['\r', '\n']:
-                fn += char
-            else:
-                if fn:
-                    file_list.append(fn.strip())
-                fn = ''
-        for fn in file_list[1:]:  # first line is the list command sent to device
-            if args.verbose:
-                sys.stderr.write("Delete file {} from device.\r\n".format(fn))
-            transport.writeln("file.remove(\"" + fn + "\")\r")
-        sys.exit(0)
-
     if args.delete:
-        transport.writeln("file.remove(\"" + args.delete + "\")\r")
+        transport.writeln("os.remove(\"" + args.delete + "\");\r\n")
         sys.exit(0)
 
     if args.dest is None:
-        args.dest = basename(args.src)
+        args.dest = '/lua/'+basename(args.src)
 
     # open source file for reading
     try:
@@ -295,9 +250,9 @@ if __name__ == '__main__':
     if args.append==False:
         if args.verbose:
             sys.stderr.write("Stage 1. Deleting old file from flash memory")
-        transport.writeln("file.open(\"" + args.dest + "\", \"w\")\r")
-        transport.writeln("file.close()\r")
-        transport.writeln("file.remove(\"" + args.dest + "\")\r")
+        transport.writeln("file = io.open(\"" + args.dest + "\", \"w\");\r\n")
+        transport.writeln("if file then file:close() end;\r\n")
+        transport.writeln("os.remove(\"" + args.dest + "\");\r\n")
     else:
         if args.verbose:
             sys.stderr.write("[SKIPPED] Stage 1. Deleting old file from flash memory [SKIPPED]")
@@ -307,9 +262,9 @@ if __name__ == '__main__':
     if args.verbose:
         sys.stderr.write("\r\nStage 2. Creating file in flash memory and write first line")
     if args.append:
-        transport.writeln("file.open(\"" + args.dest + "\", \"a+\")\r")
+        transport.writeln("file = io.open(\"" + args.dest + "\", \"a+\");\r\n")
     else:
-        transport.writeln("file.open(\"" + args.dest + "\", \"w+\")\r")
+        transport.writeln("file = io.open(\"" + args.dest + "\", \"w+\");\r\n")
     line = f.readline()
     if args.verbose:
         sys.stderr.write("\r\nStage 3. Start writing data to flash memory...")
@@ -326,27 +281,20 @@ if __name__ == '__main__':
     f.close()
     if args.verbose:
         sys.stderr.write("\r\nStage 4. Flush data and closing file")
-    transport.writeln("file.flush()\r")
-    transport.writeln("file.close()\r")
-
-    # compile?
-    if args.compile:
-        if args.verbose:
-            sys.stderr.write("\r\nStage 5. Compiling")
-        transport.writeln("node.compile(\"" + args.dest + "\")\r")
-        transport.writeln("file.remove(\"" + args.dest + "\")\r")
+    transport.writeln("file:flush();\r\n")
+    transport.writeln("file:close();\r\n")
 
     # restart or dofile
     if args.restart:
-        transport.writeln("node.restart()\r")
+        transport.writeln("sys.restart('luatool restart');\r\n", 0)
     if args.dofile:   # never exec if restart=1
-        transport.writeln("dofile(\"" + args.dest + "\")\r", 0)
+        transport.writeln("dofile(\"" + args.dest + "\");\r\n", 0)
 
     if args.echo:
         if args.verbose:
             sys.stderr.write("\r\nEchoing MCU output, press Ctrl-C to exit")
         while True:
-            sys.stdout.write(transport.read(1))
+            sys.stdout.write(str(transport.read(1), encoding='gbk'))
 
     # close serial port
     transport.close()
