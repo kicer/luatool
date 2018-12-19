@@ -62,7 +62,7 @@ class AbstractTransport:
     def performcheck(self, expected):
         line = ''
         char = ''
-        i = -1
+        i = 0
         chkpass = 0
         while char != chr(62):  # '>'
             char = str(self.read(1), encoding='gbk')
@@ -93,6 +93,9 @@ class AbstractTransport:
                     line = ''
             else:
                 line += char
+                if char == chr(62) and i< len(expected) and expected[i] == char:
+                  char = ''
+                i += 1
         if line: sys.stdout.write(line)
 
 

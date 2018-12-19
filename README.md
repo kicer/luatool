@@ -25,7 +25,7 @@ v0.7.0
 #### Typical use:
 
 
-Edit file init.lua and set SSID and MasterPassword
+Download main.lua to module use [LuaTools](http://www.openluat.com/Product/software/luatools.html)
 Then disconnect any terminal programm, and at command prompt type
 
 ```
