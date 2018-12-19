@@ -63,6 +63,7 @@ class AbstractTransport:
         line = ''
         char = ''
         i = -1
+        chkpass = 0
         while char != chr(62):  # '>'
             char = str(self.read(1), encoding='gbk')
             if char == '':
@@ -70,10 +71,15 @@ class AbstractTransport:
             if char == chr(13) or char == chr(10):  # LF or CR
                 if line != '':
                     line = line.strip()
-                    if line+'\r\n' == expected and not args.bar:
-                        sys.stdout.write(" -> ok")
+                    if line+'\r\n' == expected:
+                        chkpass = 1
+                        line = ''
+                        if not args.bar:
+                            sys.stdout.write(" -> ok")
                     elif line+'\r\n' != expected:
-                        if line[:4] == "lua:":
+                        if chkpass:
+                            sys.stdout.write('%s\r\n'%line)
+                        elif line[:4] == "lua:":
                             sys.stdout.write("\r\n\r\nLua ERROR: %s" % line)
                             raise Exception('ERROR from Lua interpreter\r\n\r\n')
                         else:
@@ -87,9 +93,7 @@ class AbstractTransport:
                     line = ''
             else:
                 line += char
-                if char == chr(62) and expected[i] == char:
-                    char = ''
-                i += 1
+        if line: sys.stdout.write(line)
 
 
 class SerialTransport(AbstractTransport):
@@ -104,8 +108,8 @@ class SerialTransport(AbstractTransport):
         except serial.SerialException as e:
             raise TransportError(e.strerror)
 
-        self.serial.timeout = 3
-        self.serial.interCharTimeout = 3
+        self.serial.timeout = self.delay
+        self.serial.interCharTimeout = self.delay
 
     def writeln(self, data, check=1):
         if self.serial.inWaiting() > 0:
@@ -114,7 +118,7 @@ class SerialTransport(AbstractTransport):
             sys.stdout.write("\r\n->")
             sys.stdout.write(data.split("\r")[0])
         self.serial.write(bytes(data,encoding="gbk"))
-        sleep(self.delay)
+        #sleep(self.delay)
         if check > 0:
             self.performcheck(data)
         elif not args.bar:
@@ -164,7 +168,7 @@ class TcpSocketTransport(AbstractTransport):
 
 
 def decidetransport(cliargs):
-    return SerialTransport(cliargs.port, cliargs.baud, cliargs.delay)
+    return SerialTransport(cliargs.port, cliargs.baud, cliargs.timeout)
 
 
 if __name__ == '__main__':
@@ -172,16 +176,17 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser(description='luat script uploader.')
     parser.add_argument('-p', '--port',    default='/dev/ttyUSB0', help='Device name, default /dev/ttyUSB0')
     parser.add_argument('-b', '--baud',    default=115200,         help='Baudrate, default 115200')
-    parser.add_argument('-f', '--src',     default='main.lua',     help='Source file on computer, default main.lua')
+    parser.add_argument('-f', '--src',     default='init.lua',     help='Source file on computer, default init.lua')
     parser.add_argument('-t', '--dest',    default=None,           help='Destination file on MCU, default to source file name')
     parser.add_argument('-r', '--restart', action='store_true',    help='Restart MCU after upload')
     parser.add_argument('-d', '--dofile',  action='store_true',    help='Run the Lua script after upload')
     parser.add_argument('-v', '--verbose', action='store_true',    help="Show progress messages.")
     parser.add_argument('-a', '--append',  action='store_true',    help='Append source file to destination file.')
-    parser.add_argument('-i', '--id',      action='store_true',    help='Query the modules imei.')
     parser.add_argument('-e', '--echo',    action='store_true',    help='Echo output of MCU until script is terminated.')
+    parser.add_argument('-i', '--id',      action='store_true',    help='Query the modules imei.')
+    parser.add_argument('-s', '--shell',   action='store_true',    help='Enter shell mode.')
     parser.add_argument('--bar',           action='store_true',    help='Show a progress bar for uploads instead of printing each line')
-    parser.add_argument('--delay',         default=0.01,            help='Delay in seconds between each write.', type=float)
+    parser.add_argument('--timeout',       default=0.2,            help='Timeout in seconds each read.', type=float)
     parser.add_argument('--delete',        default=None,           help='Delete a lua/lc file from device.')
     args = parser.parse_args()
 
@@ -208,6 +213,21 @@ if __name__ == '__main__':
     if args.delete:
         transport.writeln("os.remove(\"" + args.delete + "\");\r\n")
         sys.exit(0)
+
+    if args.shell:
+        args.bar = True
+        sys.stderr.write("Enter shell mode, press Ctrl-C to exit\r\n> ")
+        while True:
+            ch = str(transport.read(1), encoding='gbk')
+            if ch:
+                sys.stdout.write(ch)
+            else: # read from user
+                sys.stdout.flush()
+                line = sys.stdin.readline().strip()
+                if line:
+                    transport.writeln("%s;\r\n"%line)
+                else:
+                    sys.stdout.write('> ')
 
     if args.dest is None:
         args.dest = '/lua/'+basename(args.src)
@@ -282,7 +302,7 @@ if __name__ == '__main__':
     if args.verbose:
         sys.stderr.write("\r\nStage 4. Flush data and closing file")
     transport.writeln("FILE:flush();\r\n")
-    transport.writeln("FILE:close();\r\n")
+    transport.writeln("FILE:close();FILE=nil;\r\n")
 
     # restart or dofile
     if args.restart:

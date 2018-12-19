@@ -18,6 +18,7 @@ python 3, pyserial
 v0.7.0
 - luat只支持串口下载文件
 - 写入文件时预设的全局变量`FILE`
+- 加入shell终端支持
 
 ### Run
 
@@ -76,11 +77,11 @@ version: 	SW_V5595_Air202_LUA_SSL
 #### Examples:
 
 ```
-./luatool.py --port COM4 --src file.lua --dest /lua/main.lua --baud 115200
+./luatool.py --port COM4 --src file.lua --dest /lua/init.lua --baud 115200
 ```
 - --port - COM1-COM128, default /dev/ttyUSB0
 - --baud - baud rate, default 115200
-- --src - source disk file, default main.lua
-- --dest - destination flash file, default /lua/main.lua
+- --src - source disk file, default init.lua
+- --dest - destination flash file, default /lua/init.lua
 
 Be carefully about bugs in lua-script - may cause a boot loop. Use this option after full testing only.
