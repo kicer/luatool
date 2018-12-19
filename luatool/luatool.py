@@ -57,7 +57,7 @@ class AbstractTransport:
         raise NotImplementedError('Function not implemented')
 
     def writer(self, data):
-        self.writeln("file:write([==[" + data + " ]==]);\r\n")
+        self.writeln("FILE:write([==[" + data + " ]==]);\r\n")
 
     def performcheck(self, expected):
         line = ''
@@ -250,8 +250,8 @@ if __name__ == '__main__':
     if args.append==False:
         if args.verbose:
             sys.stderr.write("Stage 1. Deleting old file from flash memory")
-        transport.writeln("file = io.open(\"" + args.dest + "\", \"w\");\r\n")
-        transport.writeln("if file then file:close() end;\r\n")
+        transport.writeln("FILE = io.open(\"" + args.dest + "\", \"w\");\r\n")
+        transport.writeln("if FILE then FILE:close() end;\r\n")
         transport.writeln("os.remove(\"" + args.dest + "\");\r\n")
     else:
         if args.verbose:
@@ -262,9 +262,9 @@ if __name__ == '__main__':
     if args.verbose:
         sys.stderr.write("\r\nStage 2. Creating file in flash memory and write first line")
     if args.append:
-        transport.writeln("file = io.open(\"" + args.dest + "\", \"a+\");\r\n")
+        transport.writeln("FILE = io.open(\"" + args.dest + "\", \"a+\");\r\n")
     else:
-        transport.writeln("file = io.open(\"" + args.dest + "\", \"w+\");\r\n")
+        transport.writeln("FILE = io.open(\"" + args.dest + "\", \"w+\");\r\n")
     line = f.readline()
     if args.verbose:
         sys.stderr.write("\r\nStage 3. Start writing data to flash memory...")
@@ -281,8 +281,8 @@ if __name__ == '__main__':
     f.close()
     if args.verbose:
         sys.stderr.write("\r\nStage 4. Flush data and closing file")
-    transport.writeln("file:flush();\r\n")
-    transport.writeln("file:close();\r\n")
+    transport.writeln("FILE:flush();\r\n")
+    transport.writeln("FILE:close();\r\n")
 
     # restart or dofile
     if args.restart:
