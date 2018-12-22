@@ -64,15 +64,23 @@ class AbstractTransport:
         char = b''
         i = 0
         chkpass = 0
+        prompt = 0
         while True:
-            prompt = char
             char = self.read(1)
             if char == b'':
                 raise Exception('No proper answer from MCU')
             # break when found prompt word
-            if prompt+char == b'> ':
-                bline += char
-                break;
+            if char == b'\n':
+                prompt = 1
+            elif prompt == 1:
+                prompt = 0
+                if char == b'>':
+                  prompt = 2
+            elif prompt == 2:
+                prompt = 0
+                if char == b' ':
+                  bline += char
+                  break
             if char == chr(13).encode() or char == chr(10).encode():  # LF or CR
                 line = bline.decode('utf-8',errors='ignore')
                 if line != '':
