@@ -57,7 +57,12 @@ class AbstractTransport:
         raise NotImplementedError('Function not implemented')
 
     def writer(self, data):
-        self.writeln("FILE:write([==[" + data + " ]==]);\r\n")
+        # max length is 200
+        _cnt = len(data)
+        for i in range(0,len(data),200):
+            _cnt -= 200; last=''
+            if _cnt <= 0: last=' '
+            self.writeln("FILE:write([==[" + data[i:i+200] + last +"]==]);\r\n")
 
     def performcheck(self, expected):
         bline = b''
@@ -255,12 +260,6 @@ if __name__ == '__main__':
     # lines longer than 230 characters to have some room for command overhead.
     num_lines = 0
     for ln in f:
-        if len(ln) > 230:
-            sys.stderr.write("File \"%s\" contains a line with more than 240 "
-                             "characters. This exceeds the size of the serial buffer.\n"
-                             % args.src)
-            f.close()
-            sys.exit(1)
         num_lines += 1
 
     # Go back to the beginning of the file after verifying it has the correct
