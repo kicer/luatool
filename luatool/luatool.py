@@ -60,22 +60,28 @@ class AbstractTransport:
         self.writeln("FILE:write([==[" + data + " ]==]);\r\n")
 
     def performcheck(self, expected):
-        line = ''
-        char = ''
+        bline = b''
+        char = b''
         i = 0
         chkpass = 0
-        while char != chr(62):  # '>'
-            char = str(self.read(1), encoding='gbk')
-            if char == '':
+        while True:
+            prompt = char
+            char = self.read(1)
+            if char == b'':
                 raise Exception('No proper answer from MCU')
-            if char == chr(13) or char == chr(10):  # LF or CR
+            # break when found prompt word
+            if prompt+char == b'> ':
+                bline += char
+                break;
+            if char == chr(13).encode() or char == chr(10).encode():  # LF or CR
+                line = bline.decode('utf-8',errors='ignore')
                 if line != '':
                     line = line.strip()
                     if line+'\r\n' == expected:
                         chkpass = 1
-                        line = ''
+                        bline = b''
                         if not args.bar:
-                            sys.stdout.write(" -> ok")
+                            sys.stdout.write(" -> ok\r\n")
                     elif line+'\r\n' != expected:
                         if chkpass:
                             sys.stdout.write('%s\r\n'%line)
@@ -90,13 +96,14 @@ class AbstractTransport:
                             sys.stdout.write("\r\n but got answer : '%s'" % line)
                             sys.stdout.write("\r\n\r\n")
                             raise Exception('Error sending data to MCU\r\n\r\n')
-                    line = ''
+                    bline = b''
             else:
-                line += char
-                if char == chr(62) and i< len(expected) and expected[i] == char:
-                  char = ''
+                bline += char
+                if char == b'>':
+                  if i< len(expected) and expected[i] == char:
+                    char = b''
                 i += 1
-        if line: sys.stdout.write(line)
+        if bline: sys.stdout.write(bline.decode('utf-8',errors='ignore'))
 
 
 class SerialTransport(AbstractTransport):
@@ -111,16 +118,16 @@ class SerialTransport(AbstractTransport):
         except serial.SerialException as e:
             raise TransportError(e.strerror)
 
-        self.serial.timeout = self.delay
-        self.serial.interCharTimeout = self.delay
+        self.serial.timeout = 3
+        self.serial.interCharTimeout = 3
 
     def writeln(self, data, check=1):
         if self.serial.inWaiting() > 0:
             self.serial.flushInput()
         if len(data) > 0 and not args.bar:
-            sys.stdout.write("\r\n->")
+            sys.stdout.write("->")
             sys.stdout.write(data.split("\r")[0])
-        self.serial.write(bytes(data,encoding="gbk"))
+        self.serial.write(data.encode("utf-8",errors='ignore'))
         #sleep(self.delay)
         if check > 0:
             self.performcheck(data)
@@ -185,11 +192,10 @@ if __name__ == '__main__':
     parser.add_argument('-d', '--dofile',  action='store_true',    help='Run the Lua script after upload')
     parser.add_argument('-v', '--verbose', action='store_true',    help="Show progress messages.")
     parser.add_argument('-a', '--append',  action='store_true',    help='Append source file to destination file.')
-    parser.add_argument('-e', '--echo',    action='store_true',    help='Echo output of MCU until script is terminated.')
     parser.add_argument('-i', '--id',      action='store_true',    help='Query the modules imei.')
     parser.add_argument('-s', '--shell',   action='store_true',    help='Enter shell mode.')
     parser.add_argument('--bar',           action='store_true',    help='Show a progress bar for uploads instead of printing each line')
-    parser.add_argument('--timeout',       default=0.2,            help='Timeout in seconds each read.', type=float)
+    parser.add_argument('--timeout',       default=0.5,            help='Timeout in seconds each read.', type=float)
     parser.add_argument('--delete',        default=None,           help='Delete a lua/lc file from device.')
     args = parser.parse_args()
 
@@ -202,15 +208,7 @@ if __name__ == '__main__':
 
 
     if args.id:
-        transport.writeln("print(misc.getImei());\r\n", 0)
-        id=""
-        while True:
-            char = str(transport.read(1), encoding='gbk')
-            if char == '' or char == chr(62):
-                break
-            if char.isdigit():
-                id += char
-        print("\n"+id)
+        transport.writeln("print(misc.getImei());\r\n")
         sys.exit(0)
 
     if args.delete:
@@ -221,16 +219,12 @@ if __name__ == '__main__':
         args.bar = True
         sys.stderr.write("Enter shell mode, press Ctrl-C to exit\r\n> ")
         while True:
-            ch = str(transport.read(1), encoding='gbk')
-            if ch:
-                sys.stdout.write(ch)
-            else: # read from user
-                sys.stdout.flush()
-                line = sys.stdin.readline().strip()
-                if line:
-                    transport.writeln("%s;\r\n"%line)
-                else:
-                    sys.stdout.write('> ')
+            sys.stdout.flush()
+            line = sys.stdin.readline().strip()
+            if line:
+                transport.writeln("%s;\r\n"%line)
+            else:
+                sys.stdout.write('> ')
 
     if args.dest is None:
         args.dest = '/lua/'+basename(args.src)
@@ -305,19 +299,19 @@ if __name__ == '__main__':
     if args.verbose:
         sys.stderr.write("\r\nStage 4. Flush data and closing file")
     transport.writeln("FILE:flush();\r\n")
-    transport.writeln("FILE:close();FILE=nil;\r\n")
+    transport.writeln("FILE:close();FILE=nil;collectgarbage('collect');\r\n")
 
     # restart or dofile
     if args.restart:
         transport.writeln("sys.restart('luatool restart');\r\n", 0)
     if args.dofile:   # never exec if restart=1
-        transport.writeln("dofile(\"" + args.dest + "\");\r\n", 0)
-
-    if args.echo:
+        transport.writeln("dofile(\"" + args.dest + "\");\r\n")
         if args.verbose:
             sys.stderr.write("\r\nEchoing MCU output, press Ctrl-C to exit")
         while True:
-            sys.stdout.write(str(transport.read(1), encoding='gbk'))
+            ch = transport.read(1)
+            if ch:
+                sys.stdout.write(chr(ord(ch)))
 
     # close serial port
     transport.close()
