@@ -60,9 +60,11 @@ class AbstractTransport:
         # max length is 200
         _cnt = len(data)
         for i in range(0,len(data),200):
-            _cnt -= 200; last=''
-            if _cnt <= 0: last=' '
-            self.writeln("FILE:write([==[" + data[i:i+200] + last +"]==]);\r\n")
+            _cnt -= 200
+            if _cnt <= 0:
+                self.writeln("FILE:write([==[" + data[i:i+200] +"]==],'\\10');\r\n")
+            else:
+                self.writeln("FILE:write([==[" + data[i:i+200] +"]==]);\r\n")
 
     def performcheck(self, expected):
         bline = b''
